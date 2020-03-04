@@ -674,6 +674,19 @@ config CHARGER_SC2731
 	 Say Y here to enable support for battery charging with SC2731
 	 PMIC chips.
 
+config CHARGER_SN2400
+	tristate "SN2400 charger for Hx devices"
+	help
+	  Provides support for battery charging and USB power on mobile
+	  devices with Hx chips.
+
+config BATTERY_BQ27545_HDQUART
+	tristate "bq27545 battery gas gauge on UART-base HDQ"
+	depends on SERIAL_DEV_BUS
+	help
+	  Provides support for battery state-of-charge monitoring on
+	  mobile devices with Hx chips.
+
 config FUEL_GAUGE_SC27XX
 	tristate "Spreadtrum SC27XX fuel gauge driver"
 	depends on MFD_SC27XX_PMIC || COMPILE_TEST

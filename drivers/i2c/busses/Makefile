@@ -66,6 +66,7 @@ obj-$(CONFIG_I2C_EXYNOS5)	+= i2c-exynos5.o
 obj-$(CONFIG_I2C_GPIO)		+= i2c-gpio.o
 obj-$(CONFIG_I2C_HIGHLANDER)	+= i2c-highlander.o
 obj-$(CONFIG_I2C_HIX5HD2)	+= i2c-hix5hd2.o
+obj-$(CONFIG_I2C_HX)		+= i2c-hx.o
 obj-$(CONFIG_I2C_IBM_IIC)	+= i2c-ibm_iic.o
 obj-$(CONFIG_I2C_IMG)		+= i2c-img-scb.o
 obj-$(CONFIG_I2C_IMX)		+= i2c-imx.o

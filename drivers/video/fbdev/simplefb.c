@@ -78,6 +78,11 @@ static void simplefb_destroy(struct fb_info *info)
 		iounmap(info->screen_base);
 }
 
+static int simplefb_blank(int blank, struct fb_info *info)
+{
+	return 0; /* it's as blank as it'll get... rely on backlight to blank it */
+}
+
 static struct fb_ops simplefb_ops = {
 	.owner		= THIS_MODULE,
 	.fb_destroy	= simplefb_destroy,
@@ -85,6 +90,7 @@ static struct fb_ops simplefb_ops = {
 	.fb_fillrect	= cfb_fillrect,
 	.fb_copyarea	= cfb_copyarea,
 	.fb_imageblit	= cfb_imageblit,
+	.fb_blank	= simplefb_blank,
 };
 
 static struct simplefb_format simplefb_formats[] = SIMPLEFB_FORMATS;

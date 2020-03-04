@@ -223,6 +223,12 @@ config POWER_RESET_ZX
 	help
 	  Reboot support for ZTE SoCs.
 
+config POWER_RESET_HX
+	tristate "Hx SoCs reset driver"
+	depends on ARCH_HX
+	help
+	  Reboot support for Hx SoCs.
+
 config REBOOT_MODE
 	tristate
 

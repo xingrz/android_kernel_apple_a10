@@ -47,8 +47,8 @@
 	.endm
 
 	/* IRQ is the lowest priority flag, unconditionally unmask the rest. */
-	.macro enable_da_f
-	msr	daifclr, #(8 | 4 | 1)
+	.macro enable_da
+	msr	daifclr, #(8 | 4)
 	.endm
 
 /*
@@ -56,7 +56,7 @@
  */
 	.macro	save_and_disable_irq, flags
 	mrs	\flags, daif
-	msr	daifset, #2
+	msr	daifset, #3
 	.endm
 
 	.macro	restore_irq, flags

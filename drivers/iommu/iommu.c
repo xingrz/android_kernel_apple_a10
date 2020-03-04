@@ -758,7 +758,8 @@ err_remove_link:
 	sysfs_remove_link(&dev->kobj, "iommu_group");
 err_free_device:
 	kfree(device);
-	dev_err(dev, "Failed to add to iommu group %d: %d\n", group->id, ret);
+	if(ret != -ENODEV)
+		dev_err(dev, "Failed to add to iommu group %d: %d\n", group->id, ret);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(iommu_group_add_device);

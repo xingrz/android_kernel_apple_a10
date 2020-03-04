@@ -128,7 +128,7 @@ static __always_inline u64 __arch_get_hw_counter(s32 clock_mode)
 	 * is speculated.
 	 */
 	isb();
-	asm volatile("mrrc p15, 1, %Q0, %R0, c14" : "=r" (res));
+	asm volatile("mrrc p15, 0, %Q0, %R0, c14" : "=r" (res));
 	/*
 	 * This isb() is required to prevent that the seq lock is
 	 * speculated.

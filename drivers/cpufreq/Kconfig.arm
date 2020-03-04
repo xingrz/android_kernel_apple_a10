@@ -338,3 +338,9 @@ config ARM_PXA2xx_CPUFREQ
 	  This add the CPUFreq driver support for Intel PXA2xx SOCs.
 
 	  If in doubt, say N.
+
+config ARM_HX_CPUFREQ
+	tristate "Hx SoC CPU power state driver"
+	depends on ARCH_HX
+	help
+	  This add the CPUFreq driver support for Hx SoCs.

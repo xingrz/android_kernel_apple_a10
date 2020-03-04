@@ -1,0 +1,30 @@
+menuconfig HX_PLATFORM
+	bool "Hx SoC Platform Specific Device Drivers"
+	default y
+	help
+	  Say Y here to get to see options for device drivers of Hx SoCs.
+	  If you say N, all options in this submenu will be skipped and disabled.
+
+if HX_PLATFORM
+
+config HX_PMU_I2C
+	bool "Hx PMUs with I2C found on mobile devices"
+	select REGMAP_I2C
+	depends on I2C=y
+	help
+	  Support for the PMUs found on mobile devices with Hx SoC.
+	  This driver provides common support for accessing the device,
+	  additional drivers must be enabled in order to use the
+	  functionality of the device.
+
+config HX_DWI
+	bool "DWI backlight brightness interface"
+	help
+	  Support for the backlight control interface found on Hx SoCs.
+
+config HX_MIPI_DSI
+	bool "MIPI display interface"
+	help
+	  Support for the state control of MIPI display interface.
+
+endif

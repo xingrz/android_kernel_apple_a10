@@ -180,7 +180,7 @@ static void __kprobes kprobes_save_local_irqflag(struct kprobe_ctlblk *kcb,
 						struct pt_regs *regs)
 {
 	kcb->saved_irqflag = regs->pstate & DAIF_MASK;
-	regs->pstate |= PSR_I_BIT;
+	regs->pstate |= PSR_I_BIT | PSR_F_BIT;
 	/* Unmask PSTATE.D for enabling software step exceptions. */
 	regs->pstate &= ~PSR_D_BIT;
 }

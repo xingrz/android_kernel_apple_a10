@@ -78,57 +78,10 @@ static unsigned int poll_queues;
 module_param(poll_queues, uint, 0644);
 MODULE_PARM_DESC(poll_queues, "Number of queues to use for polled IO.");
 
-struct nvme_dev;
-struct nvme_queue;
+#include "nvme-pci.h"
 
 static void nvme_dev_disable(struct nvme_dev *dev, bool shutdown);
 static bool __nvme_disable_io_queues(struct nvme_dev *dev, u8 opcode);
-
-/*
- * Represents an NVM Express device.  Each nvme_dev is a PCI function.
- */
-struct nvme_dev {
-	struct nvme_queue *queues;
-	struct blk_mq_tag_set tagset;
-	struct blk_mq_tag_set admin_tagset;
-	u32 __iomem *dbs;
-	struct device *dev;
-	struct dma_pool *prp_page_pool;
-	struct dma_pool *prp_small_pool;
-	unsigned online_queues;
-	unsigned max_qid;
-	unsigned io_queues[HCTX_MAX_TYPES];
-	unsigned int num_vecs;
-	int q_depth;
-	int io_sqes;
-	u32 db_stride;
-	void __iomem *bar;
-	unsigned long bar_mapped_size;
-	struct work_struct remove_work;
-	struct mutex shutdown_lock;
-	bool subsystem;
-	u64 cmb_size;
-	bool cmb_use_sqes;
-	u32 cmbsz;
-	u32 cmbloc;
-	struct nvme_ctrl ctrl;
-	u32 last_ps;
-
-	mempool_t *iod_mempool;
-
-	/* shadow doorbell buffer support: */
-	u32 *dbbuf_dbs;
-	dma_addr_t dbbuf_dbs_dma_addr;
-	u32 *dbbuf_eis;
-	dma_addr_t dbbuf_eis_dma_addr;
-
-	/* host memory buffer support: */
-	u64 host_mem_size;
-	u32 nr_host_mem_descs;
-	dma_addr_t host_mem_descs_dma;
-	struct nvme_host_mem_buf_desc *host_mem_descs;
-	void **host_mem_desc_bufs;
-};
 
 static int io_queue_depth_set(const char *val, const struct kernel_param *kp)
 {
@@ -150,66 +103,6 @@ static inline unsigned int cq_idx(unsigned int qid, u32 stride)
 {
 	return (qid * 2 + 1) * stride;
 }
-
-static inline struct nvme_dev *to_nvme_dev(struct nvme_ctrl *ctrl)
-{
-	return container_of(ctrl, struct nvme_dev, ctrl);
-}
-
-/*
- * An NVM Express queue.  Each device has at least two (one for admin
- * commands and one for I/O commands).
- */
-struct nvme_queue {
-	struct nvme_dev *dev;
-	spinlock_t sq_lock;
-	void *sq_cmds;
-	 /* only used for poll queues: */
-	spinlock_t cq_poll_lock ____cacheline_aligned_in_smp;
-	volatile struct nvme_completion *cqes;
-	struct blk_mq_tags **tags;
-	dma_addr_t sq_dma_addr;
-	dma_addr_t cq_dma_addr;
-	u32 __iomem *q_db;
-	u16 q_depth;
-	u16 cq_vector;
-	u16 sq_tail;
-	u16 last_sq_tail;
-	u16 cq_head;
-	u16 last_cq_head;
-	u16 qid;
-	u8 cq_phase;
-	u8 sqes;
-	unsigned long flags;
-#define NVMEQ_ENABLED		0
-#define NVMEQ_SQ_CMB		1
-#define NVMEQ_DELETE_ERROR	2
-#define NVMEQ_POLLED		3
-	u32 *dbbuf_sq_db;
-	u32 *dbbuf_cq_db;
-	u32 *dbbuf_sq_ei;
-	u32 *dbbuf_cq_ei;
-	struct completion delete_done;
-};
-
-/*
- * The nvme_iod describes the data in an I/O.
- *
- * The sg pointer contains the list of PRP/SGL chunk allocations in addition
- * to the actual struct scatterlist.
- */
-struct nvme_iod {
-	struct nvme_request req;
-	struct nvme_queue *nvmeq;
-	bool use_sgl;
-	int aborted;
-	int npages;		/* In the PRP list. 0 means small pool in use */
-	int nents;		/* Used in scatterlist */
-	dma_addr_t first_dma;
-	unsigned int dma_len;	/* length of single DMA segment mapping */
-	dma_addr_t meta_dma;
-	struct scatterlist *sg;
-};
 
 static unsigned int max_io_queues(void)
 {
@@ -539,7 +432,14 @@ static void nvme_unmap_data(struct nvme_dev *dev, struct request *req)
 	struct nvme_iod *iod = blk_mq_rq_to_pdu(req);
 	const int last_prp = dev->ctrl.page_size / sizeof(__le64) - 1;
 	dma_addr_t dma_addr = iod->first_dma, next_dma_addr;
-	int i;
+	int i, ret;
+
+	if(dev->ctrl.quirks & NVME_QUIRK_HX_NVME) {
+		ret = nvme_hx_unmap_data(&dev->ctrl, req);
+		if(ret == BLK_STS_OK)
+			return;
+	}
+
 
 	if (iod->dma_len) {
 		dma_unmap_page(dev->dev, dma_addr, iod->dma_len,
@@ -811,6 +711,12 @@ static blk_status_t nvme_map_data(struct nvme_dev *dev, struct request *req,
 	struct nvme_iod *iod = blk_mq_rq_to_pdu(req);
 	blk_status_t ret = BLK_STS_RESOURCE;
 	int nr_mapped;
+
+	if(dev->ctrl.quirks & NVME_QUIRK_HX_NVME) {
+		ret = nvme_hx_map_data(&dev->ctrl, req, cmnd);
+		if(ret != BLK_STS_NOTSUPP)
+			return ret;
+	}
 
 	if (blk_rq_nr_phys_segments(req) == 1) {
 		struct bio_vec bv = req_bvec(req);
@@ -2376,11 +2282,17 @@ static int nvme_pci_enable(struct nvme_dev *dev)
 			 dev->q_depth);
 	}
 
+	if (dev->ctrl.quirks & NVME_QUIRK_HX_NVME) {
+		result = nvme_hx_preinit(&dev->ctrl, dev->dev);
+		if (result)
+			goto disable;
+	}
 
 	nvme_map_cmb(dev);
 
 	pci_enable_pcie_error_reporting(pdev);
 	pci_save_state(pdev);
+
 	return 0;
 
  disable:
@@ -2422,7 +2334,7 @@ static void nvme_dev_disable(struct nvme_dev *dev, bool shutdown)
 			nvme_start_freeze(&dev->ctrl);
 		}
 		dead = !!((csts & NVME_CSTS_CFS) || !(csts & NVME_CSTS_RDY) ||
-			pdev->error_state  != pci_channel_io_normal);
+				pdev->error_state  != pci_channel_io_normal);
 	}
 
 	/*
@@ -2654,6 +2566,7 @@ static void nvme_reset_work(struct work_struct *work)
 	if (result)
 		dev_warn(dev->ctrl.device,
 			 "Removing after probe failure status: %d\n", result);
+
 	nvme_remove_dead_ctrl(dev);
 }
 
@@ -3109,6 +3022,10 @@ static const struct pci_device_id nvme_id_table[] = {
 				NVME_QUIRK_IGNORE_DEV_SUBNQN, },
 	{ PCI_DEVICE_CLASS(PCI_CLASS_STORAGE_EXPRESS, 0xffffff) },
 	{ PCI_DEVICE(PCI_VENDOR_ID_APPLE, 0x2001) },
+	{ PCI_DEVICE(PCI_VENDOR_ID_APPLE, 0x2002),
+		.driver_data = NVME_QUIRK_HX_NVME |
+				NVME_QUIRK_SINGLE_VECTOR |
+				NVME_QUIRK_SHARED_TAGS },
 	{ PCI_DEVICE(PCI_VENDOR_ID_APPLE, 0x2003) },
 	{ PCI_DEVICE(PCI_VENDOR_ID_APPLE, 0x2005),
 		.driver_data = NVME_QUIRK_SINGLE_VECTOR |

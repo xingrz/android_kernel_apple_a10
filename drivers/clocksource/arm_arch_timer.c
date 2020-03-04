@@ -839,6 +839,7 @@ static void arch_counter_set_user_access(void)
 		pr_info("CPU%d: Trapping CNTVCT access\n", smp_processor_id());
 	else
 		cntkctl |= ARCH_TIMER_USR_VCT_ACCESS_EN;
+	cntkctl |= ARCH_TIMER_USR_PCT_ACCESS_EN;
 
 	arch_timer_set_cntkctl(cntkctl);
 }
@@ -965,7 +966,7 @@ static void __init arch_counter_register(unsigned type)
 	if (type & ARCH_TIMER_TYPE_CP15) {
 		u64 (*rd)(void);
 
-		if ((IS_ENABLED(CONFIG_ARM64) && !is_hyp_mode_available()) ||
+		if ((IS_ENABLED(CONFIG_ARM64) && !is_hyp_mode_available() && !IS_ENABLED(CONFIG_ARCH_HX)) ||
 		    arch_timer_uses_ppi == ARCH_TIMER_VIRT_PPI) {
 			if (arch_timer_counter_has_wa())
 				rd = arch_counter_get_cntvct_stable;

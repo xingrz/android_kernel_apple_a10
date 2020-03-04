@@ -403,6 +403,12 @@ config SPI_FSL_ESPI
 	  From MPC8536, 85xx platform uses the controller, and all P10xx,
 	  P20xx, P30xx,P40xx, P50xx uses this controller.
 
+config SPI_HX
+	tristate "Hx SoC SPI controller"
+	depends on GPIOLIB
+	help
+	  This is the driver for SPI controller found in Hx SoCs.
+
 config SPI_MESON_SPICC
 	tristate "Amlogic Meson SPICC controller"
 	depends on ARCH_MESON || COMPILE_TEST

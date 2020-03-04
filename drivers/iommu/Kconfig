@@ -465,6 +465,14 @@ config QCOM_IOMMU
 	help
 	  Support for IOMMU on certain Qualcomm SoCs.
 
+config HX_DART_IOMMU
+	bool "Hx SoC DART IOMMU"
+	depends on ARCH_HX
+	select ARM_DMA_USE_IOMMU
+	select IOMMU_API
+	help
+	  Support for DART IOMMU on Hx SoCs.
+
 config HYPERV_IOMMU
 	bool "Hyper-V x2APIC IRQ Handling"
 	depends on HYPERV

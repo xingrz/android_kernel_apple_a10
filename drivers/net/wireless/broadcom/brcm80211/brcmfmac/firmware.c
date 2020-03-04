@@ -368,6 +368,14 @@ static void brcmf_fw_add_defaults(struct nvram_parser *nvp)
 	nvp->nvram_len++;
 }
 
+static void brcmf_fw_set_macaddr(struct nvram_parser *nvp, const char *mac_addr)
+{
+	size_t len = strlen("macaddr=") + strlen(mac_addr) + 1;
+	memmove(&nvp->nvram[len], &nvp->nvram[0], nvp->nvram_len);
+	nvp->nvram_len += len;
+	sprintf(&nvp->nvram[0], "macaddr=%s", mac_addr);
+}
+
 /* brcmf_nvram_strip :Takes a buffer of "<var>=<value>\n" lines read from a fil
  * and ending in a NUL. Removes carriage returns, empty lines, comment lines,
  * and converts newlines to NULs. Shortens buffer as needed and pads with NULs.
@@ -404,8 +412,11 @@ static void *brcmf_fw_nvram_strip(const u8 *data, size_t data_len,
 
 	brcmf_fw_add_defaults(&nvp);
 
+	if(brcmf_mac_addr[0])
+		brcmf_fw_set_macaddr(&nvp, brcmf_mac_addr);
+
 	pad = nvp.nvram_len;
-	*new_length = roundup(nvp.nvram_len + 1, 4);
+	*new_length = roundup(nvp.nvram_len + 1, 8) + 4;
 	while (pad != *new_length) {
 		nvp.nvram[pad] = 0;
 		pad++;
@@ -721,7 +732,7 @@ brcmf_fw_alloc_request(u32 chip, u32 chiprev,
 	brcmf_info("using %s for chip %s\n",
 		   mapping_table[i].fw_base, chipname);
 
-	mp_path = brcmf_mp_global.firmware_path;
+	mp_path = brcmf_firmware_path;
 	mp_path_len = strnlen(mp_path, BRCMF_FW_ALTPATH_LEN);
 	if (mp_path_len)
 		end = mp_path[mp_path_len - 1];
@@ -732,7 +743,7 @@ brcmf_fw_alloc_request(u32 chip, u32 chiprev,
 		fwreq->items[j].path = fwnames[j].path;
 		fwnames[j].path[0] = '\0';
 		/* check if firmware path is provided by module parameter */
-		if (brcmf_mp_global.firmware_path[0] != '\0') {
+		if (brcmf_firmware_path[0] != '\0') {
 			strlcpy(fwnames[j].path, mp_path,
 				BRCMF_FW_NAME_LEN);
 

@@ -30,12 +30,12 @@
 
 #define NVME_MINORS		(1U << MINORBITS)
 
-unsigned int admin_timeout = 60;
+unsigned int admin_timeout = 10;
 module_param(admin_timeout, uint, 0644);
 MODULE_PARM_DESC(admin_timeout, "timeout in seconds for admin commands");
 EXPORT_SYMBOL_GPL(admin_timeout);
 
-unsigned int nvme_io_timeout = 30;
+unsigned int nvme_io_timeout = 5;
 module_param_named(io_timeout, nvme_io_timeout, uint, 0644);
 MODULE_PARM_DESC(io_timeout, "timeout in seconds for I/O");
 EXPORT_SYMBOL_GPL(nvme_io_timeout);
@@ -2140,6 +2140,12 @@ int nvme_enable_ctrl(struct nvme_ctrl *ctrl)
 	ctrl->ctrl_config |= NVME_CC_IOSQES | NVME_CC_IOCQES;
 	ctrl->ctrl_config |= NVME_CC_ENABLE;
 
+	if(ctrl->quirks & NVME_QUIRK_HX_NVME) {
+		ret = nvme_hx_preenable(ctrl, ctrl->dev);
+		if (ret)
+			return ret;
+	}
+
 	ret = ctrl->ops->reg_write32(ctrl, NVME_REG_CC, ctrl->ctrl_config);
 	if (ret)
 		return ret;
@@ -2800,6 +2806,11 @@ int nvme_init_identify(struct nvme_ctrl *ctrl)
 		max_hw_sectors = 1 << (id->mdts + page_shift - 9);
 	else
 		max_hw_sectors = UINT_MAX;
+
+	if(ctrl->quirks & NVME_QUIRK_HX_NVME) {
+		max_hw_sectors = min_not_zero(max_hw_sectors, nvme_hx_max_req_size(ctrl));
+	}
+
 	ctrl->max_hw_sectors =
 		min_not_zero(ctrl->max_hw_sectors, max_hw_sectors);
 
