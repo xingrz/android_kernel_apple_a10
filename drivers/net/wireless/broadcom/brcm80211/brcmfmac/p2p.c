@@ -542,7 +542,8 @@ static s32 brcmf_p2p_deinit_discovery(struct brcmf_p2p_info *p2p)
 
 	/* Set the discovery state to SCAN */
 	vif = p2p->bss_idx[P2PAPI_BSSCFG_DEVICE].vif;
-	(void)brcmf_p2p_set_discover_state(vif->ifp, WL_P2P_DISC_ST_SCAN, 0, 0);
+	if (vif != NULL)
+		(void)brcmf_p2p_set_discover_state(vif->ifp, WL_P2P_DISC_ST_SCAN, 0, 0);
 
 	/* Disable P2P discovery in the firmware */
 	vif = p2p->bss_idx[P2PAPI_BSSCFG_PRIMARY].vif;
@@ -1299,6 +1300,8 @@ brcmf_p2p_gon_req_collision(struct brcmf_p2p_info *p2p, u8 *mac)
 	 * if not (sa addr > da addr),
 	 * this device will process gon request and drop gon req of peer.
 	 */
+	if(p2p->bss_idx[P2PAPI_BSSCFG_DEVICE].vif == NULL)
+		return false;
 	ifp = p2p->bss_idx[P2PAPI_BSSCFG_DEVICE].vif->ifp;
 	if (memcmp(mac, ifp->mac_addr, ETH_ALEN) < 0) {
 		brcmf_dbg(INFO, "Block transmit gon req !!!\n");
@@ -1501,6 +1504,10 @@ static s32 brcmf_p2p_tx_action_frame(struct brcmf_p2p_info *p2p,
 	clear_bit(BRCMF_P2P_STATUS_ACTION_TX_NOACK, &p2p->status);
 
 	vif = p2p->bss_idx[P2PAPI_BSSCFG_DEVICE].vif;
+	if (vif == NULL) {
+		bphy_err(drvr, " no P2P interface available\n");
+		goto exit;
+	}
 	err = brcmf_fil_bsscfg_data_set(vif->ifp, "actframe", af_params,
 					sizeof(*af_params));
 	if (err) {
@@ -1664,6 +1671,9 @@ bool brcmf_p2p_send_action_frame(struct brcmf_cfg80211_info *cfg,
 	s32 tx_retry;
 	s32 extra_listen_time;
 	uint delta_ms;
+
+	if(p2p->bss_idx[P2PAPI_BSSCFG_DEVICE].vif == NULL)
+		goto exit;
 
 	action_frame = &af_params->action_frame;
 	action_frame_len = le16_to_cpu(action_frame->len);

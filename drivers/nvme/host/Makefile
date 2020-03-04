@@ -16,6 +16,7 @@ nvme-core-$(CONFIG_NVM)			+= lightnvm.o
 nvme-core-$(CONFIG_FAULT_INJECTION_DEBUG_FS)	+= fault_inject.o
 
 nvme-y					+= pci.o
+nvme-$(CONFIG_ARCH_HX)			+= hx.o
 
 nvme-fabrics-y				+= fabrics.o
 

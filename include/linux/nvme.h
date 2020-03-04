@@ -86,7 +86,7 @@ enum {
 	NVMF_RDMA_CMS_RDMA_CM	= 1, /* Sockets based endpoint addressing */
 };
 
-#define NVME_AQ_DEPTH		32
+#define NVME_AQ_DEPTH		37
 #define NVME_NR_AEN_COMMANDS	1
 #define NVME_AQ_BLK_MQ_DEPTH	(NVME_AQ_DEPTH - NVME_NR_AEN_COMMANDS)
 
@@ -664,6 +664,7 @@ enum {
 	NVME_CMD_FUSE_FIRST	= (1 << 0),
 	NVME_CMD_FUSE_SECOND	= (1 << 1),
 
+	NVME_CMD_HX_FLATDMA	= (1 << 5),
 	NVME_CMD_SGL_METABUF	= (1 << 6),
 	NVME_CMD_SGL_METASEG	= (1 << 7),
 	NVME_CMD_SGL_ALL	= NVME_CMD_SGL_METABUF | NVME_CMD_SGL_METASEG,

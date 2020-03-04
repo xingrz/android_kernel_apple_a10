@@ -643,6 +643,11 @@ config I2C_HIGHLANDER
 	  This driver can also be built as a module.  If so, the module
 	  will be called i2c-highlander.
 
+config I2C_HX
+	tristate "Hx SoC I2C controller"
+	help
+	  Adds support for Hx SoC I2C controller.
+
 config I2C_IBM_IIC
 	tristate "IBM PPC 4xx on-chip I2C interface"
 	depends on 4xx

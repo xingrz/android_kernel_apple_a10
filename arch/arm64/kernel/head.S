@@ -108,6 +108,7 @@ pe_header:
 ENTRY(stext)
 	bl	preserve_boot_args
 	bl	el2_setup			// Drop to EL1, w0=cpu_boot_mode
+
 	adrp	x23, __PHYS_OFFSET
 	and	x23, x23, MIN_KIMG_ALIGN - 1	// KASLR offset, defaults to 0
 	bl	set_cpu_boot_mode_flag
@@ -118,6 +119,9 @@ ENTRY(stext)
 	 * On return, the CPU will be ready for the MMU to be turned on and
 	 * the TCR will have been set.
 	 */
+#ifdef CONFIG_ARCH_HX
+	bl	__arch_hx_earlysetup
+#endif
 	bl	__cpu_setup			// initialise processor
 	b	__primary_switch
 ENDPROC(stext)
@@ -701,7 +705,9 @@ ENDPROC(secondary_holding_pen)
 	 * Secondary entry point that jumps straight into the kernel. Only to
 	 * be used where CPUs are brought online dynamically by the kernel.
 	 */
+        .align 11
 ENTRY(secondary_entry)
+	msr	daifset, #0xf
 	bl	el2_setup			// Drop to EL1
 	bl	set_cpu_boot_mode_flag
 	b	secondary_startup
@@ -712,8 +718,14 @@ secondary_startup:
 	 * Common entry point for secondary CPUs.
 	 */
 	bl	__cpu_secondary_check52bitva
+
+#ifdef CONFIG_ARCH_HX
+	bl	__arch_hx_earlysetup
+#endif
+
 	bl	__cpu_setup			// initialise processor
 	adrp	x1, swapper_pg_dir
+
 	bl	__enable_mmu
 	ldr	x8, =__secondary_switched
 	br	x8
@@ -978,3 +990,67 @@ __primary_switch:
 	adrp	x0, __PHYS_OFFSET
 	br	x8
 ENDPROC(__primary_switch)
+
+#if CONFIG_ARCH_HX
+#define SR_APPL_HID0		s3_0_c15_c0_0
+#define SR_APPL_HID1		s3_0_c15_c1_0
+#define SR_APPL_HID4		s3_0_c15_c4_0
+#define SR_APPL_HID5		s3_0_c15_c5_0
+#define SR_APPL_LSU_ERR_STS	s3_3_c15_c0_0
+#define SR_APPL_LSU_ERR_CTL	s3_3_c15_c1_0
+#define SR_APPL_L2C_ERR_STS	s3_3_c15_c8_0
+#define SR_APPL_L2C_ERR_ADR	s3_3_c15_c9_0
+#define SR_APPL_L2C_ERR_INF	s3_3_c15_c10_0
+#define SR_APPL_APRR0_EL1	s3_4_c15_c2_0
+#define SR_APPL_APRR1_EL1	s3_4_c15_c2_1
+#define SR_APPL_CYC_OVRD	s3_5_c15_c5_0
+
+__arch_hx_earlysetup:
+	msr	oslar_el1, xzr
+
+	movz	x18, #0x4455, lsl #48
+	movk	x18, #0x4455, lsl #32
+	movk	x18, #0x6666, lsl #16
+	movk	x18, #0x6677
+	msr	SR_APPL_APRR1_EL1, x18
+
+	movz	x18, #0x4545, lsl #48
+	movk	x18, #0x0101, lsl #32
+	movk	x18, #0x6767, lsl #16
+	movk	x18, #0x0101
+	msr	SR_APPL_APRR0_EL1, x18
+
+	mrs	x18, SR_APPL_HID5
+	bic	x18, x18, #(3 << 14)
+	orr	x18, x18, #(1 << 15)
+	msr	SR_APPL_HID5, x18
+
+	mrs	x18, SR_APPL_HID4
+	orr	x18, x18, #(1 << 11)
+	orr	x18, x18, #(1 << 44)
+	msr	SR_APPL_HID4, x18
+
+	mrs	x18, SR_APPL_HID0
+	bic	x18, x18, #(7 << 60)
+	orr	x18, x18, #(1 << 60)
+	orr	x18, x18, #(1 << 17)
+	msr	SR_APPL_HID0, x18
+
+	mrs	x18, SR_APPL_LSU_ERR_CTL
+	bic	x18, x18, #(1 << 3)
+	msr	SR_APPL_LSU_ERR_CTL, x18
+
+	mrs	x18, SR_APPL_HID1
+	orr	x18, x18, #(1 << 44)
+	msr	SR_APPL_HID1, x18
+
+	msr	SR_APPL_L2C_ERR_STS, xzr
+
+	mrs	x18, SR_APPL_CYC_OVRD
+	bic	x18, x18, #(3 << 24) /* force_down */
+	orr	x18, x18, #(2 << 24) /* force_up */
+	msr	SR_APPL_CYC_OVRD, x18
+
+	ret
+ENDPROC(__arch_hx_earlysetup)
+#endif

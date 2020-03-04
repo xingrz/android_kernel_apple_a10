@@ -76,6 +76,12 @@ enum serdev_parity {
 	SERDEV_PARITY_ODD,
 };
 
+enum serdev_stopbits {
+	SERDEV_STOPBITS_1,
+	SERDEV_STOPBITS_1_5,
+	SERDEV_STOPBITS_2
+};
+
 /*
  * serdev controller structures
  */
@@ -91,6 +97,8 @@ struct serdev_controller_ops {
 	void (*wait_until_sent)(struct serdev_controller *, long);
 	int (*get_tiocm)(struct serdev_controller *);
 	int (*set_tiocm)(struct serdev_controller *, unsigned int, unsigned int);
+	int (*set_stopbits)(struct serdev_controller *, enum serdev_stopbits);
+	int (*set_break)(struct serdev_controller *, bool);
 };
 
 /**
@@ -197,6 +205,8 @@ void serdev_device_close(struct serdev_device *);
 int devm_serdev_device_open(struct device *, struct serdev_device *);
 unsigned int serdev_device_set_baudrate(struct serdev_device *, unsigned int);
 void serdev_device_set_flow_control(struct serdev_device *, bool);
+int serdev_device_set_stopbits(struct serdev_device *, enum serdev_stopbits);
+int serdev_device_set_break(struct serdev_device *, bool);
 int serdev_device_write_buf(struct serdev_device *, const unsigned char *, size_t);
 void serdev_device_wait_until_sent(struct serdev_device *, long);
 int serdev_device_get_tiocm(struct serdev_device *);
@@ -239,6 +249,8 @@ static inline unsigned int serdev_device_set_baudrate(struct serdev_device *sdev
 	return 0;
 }
 static inline void serdev_device_set_flow_control(struct serdev_device *sdev, bool enable) {}
+static inline int serdev_device_set_stopbits(struct serdev_device *, enum serdev_stopbits) { return -ENODEV; }
+static inline int serdev_device_set_break(struct serdev_device *, bool) { return -ENODEV; }
 static inline int serdev_device_write_buf(struct serdev_device *serdev,
 					  const unsigned char *buf,
 					  size_t count)

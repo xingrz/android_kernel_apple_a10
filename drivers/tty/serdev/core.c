@@ -371,6 +371,30 @@ int serdev_device_set_parity(struct serdev_device *serdev,
 }
 EXPORT_SYMBOL_GPL(serdev_device_set_parity);
 
+int serdev_device_set_stopbits(struct serdev_device *serdev,
+			       enum serdev_stopbits stopbits)
+{
+	struct serdev_controller *ctrl = serdev->ctrl;
+
+	if (!ctrl || !ctrl->ops->set_stopbits)
+		return -ENOTSUPP;
+
+	return ctrl->ops->set_stopbits(ctrl, stopbits);
+}
+EXPORT_SYMBOL_GPL(serdev_device_set_stopbits);
+
+int serdev_device_set_break(struct serdev_device *serdev,
+			    bool cbreak)
+{
+	struct serdev_controller *ctrl = serdev->ctrl;
+
+	if (!ctrl || !ctrl->ops->set_break)
+		return -ENOTSUPP;
+
+	return ctrl->ops->set_break(ctrl, cbreak);
+}
+EXPORT_SYMBOL_GPL(serdev_device_set_break);
+
 void serdev_device_wait_until_sent(struct serdev_device *serdev, long timeout)
 {
 	struct serdev_controller *ctrl = serdev->ctrl;

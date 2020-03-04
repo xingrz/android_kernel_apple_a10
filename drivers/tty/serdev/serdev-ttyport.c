@@ -247,6 +247,32 @@ static int ttyport_set_tiocm(struct serdev_controller *ctrl, unsigned int set, u
 	return tty->ops->tiocmset(tty, set, clear);
 }
 
+static int ttyport_set_stopbits(struct serdev_controller *ctrl, enum serdev_stopbits stopbits)
+{
+	struct serport *serport = serdev_controller_get_drvdata(ctrl);
+	struct tty_struct *tty = serport->tty;
+	struct ktermios ktermios = tty->termios;
+
+	if (stopbits >= SERDEV_STOPBITS_1_5)
+		ktermios.c_cflag |= CSTOPB;
+	else
+		ktermios.c_cflag &= ~CSTOPB;
+
+	tty_set_termios(tty, &ktermios);
+	return 0;
+}
+
+static int ttyport_set_break(struct serdev_controller *ctrl, bool cbreak)
+{
+	struct serport *serport = serdev_controller_get_drvdata(ctrl);
+	struct tty_struct *tty = serport->tty;
+
+	if (!tty->ops->break_ctl)
+		return -ENOTSUPP;
+
+	return tty->ops->break_ctl(tty, cbreak ? 1 : 0);
+}
+
 static const struct serdev_controller_ops ctrl_ops = {
 	.write_buf = ttyport_write_buf,
 	.write_flush = ttyport_write_flush,
@@ -259,6 +285,8 @@ static const struct serdev_controller_ops ctrl_ops = {
 	.wait_until_sent = ttyport_wait_until_sent,
 	.get_tiocm = ttyport_get_tiocm,
 	.set_tiocm = ttyport_set_tiocm,
+	.set_stopbits = ttyport_set_stopbits,
+	.set_break = ttyport_set_break,
 };
 
 struct device *serdev_tty_port_register(struct tty_port *port,

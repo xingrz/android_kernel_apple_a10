@@ -345,6 +345,28 @@ config USB_CDC_COMPOSITE
 	  Say "y" to link the driver statically, or "m" to build a
 	  dynamically linked module.
 
+config USB_CDC_COMPOSITE_ADB
+	tristate "CDC Composite Device (Ethernet, ACM and ADB)"
+	depends on NET
+	select USB_LIBCOMPOSITE
+	select USB_U_SERIAL
+	select USB_U_ETHER
+	select USB_F_ACM
+	select USB_F_ECM
+	select USB_F_ADB
+	help
+	  This driver provides two functions in one configuration:
+	  a CDC Ethernet (ECM) link, a CDC ACM (serial port) link and
+	  an ADB port.
+
+	  This driver requires six bulk and two interrupt endpoints,
+	  plus the ability to handle altsettings.  Not all peripheral
+	  controllers are that capable.
+
+	  Say "y" to link the driver statically, or "m" to build a
+	  dynamically linked module.
+
+
 config USB_G_NOKIA
 	tristate "Nokia composite gadget"
 	depends on PHONET

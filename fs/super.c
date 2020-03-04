@@ -1360,6 +1360,11 @@ static int test_bdev_super(struct super_block *s, void *data)
 	return (void *)s->s_bdev == data;
 }
 
+static int test_bdev_super_force(struct super_block *s, void *data)
+{
+	return 0;
+}
+
 struct dentry *mount_bdev(struct file_system_type *fs_type,
 	int flags, const char *dev_name, void *data,
 	int (*fill_super)(struct super_block *, void *, int))
@@ -1387,8 +1392,8 @@ struct dentry *mount_bdev(struct file_system_type *fs_type,
 		error = -EBUSY;
 		goto error_bdev;
 	}
-	s = sget(fs_type, test_bdev_super, set_bdev_super, flags | SB_NOSEC,
-		 bdev);
+	s = sget(fs_type, (flags & SB_MULTIMOUNT) ? test_bdev_super_force : test_bdev_super, set_bdev_super,
+		 flags | SB_NOSEC, bdev);
 	mutex_unlock(&bdev->bd_fsfreeze_mutex);
 	if (IS_ERR(s))
 		goto error_s;

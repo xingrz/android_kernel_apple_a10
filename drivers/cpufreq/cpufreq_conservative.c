@@ -29,7 +29,7 @@ struct cs_dbs_tuners {
 
 /* Conservative governor macros */
 #define DEF_FREQUENCY_UP_THRESHOLD		(80)
-#define DEF_FREQUENCY_DOWN_THRESHOLD		(20)
+#define DEF_FREQUENCY_DOWN_THRESHOLD		(40)
 #define DEF_FREQUENCY_STEP			(5)
 #define DEF_SAMPLING_DOWN_FACTOR		(1)
 #define MAX_SAMPLING_DOWN_FACTOR		(10)
@@ -111,7 +111,7 @@ static unsigned int cs_dbs_update(struct cpufreq_policy *policy)
 		if (requested_freq > policy->max)
 			requested_freq = policy->max;
 
-		__cpufreq_driver_target(policy, requested_freq, CPUFREQ_RELATION_H);
+		__cpufreq_driver_target(policy, requested_freq, CPUFREQ_RELATION_C);
 		dbs_info->requested_freq = requested_freq;
 		goto out;
 	}

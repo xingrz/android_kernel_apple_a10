@@ -251,6 +251,16 @@ config PCIE_MOBIVEIL
 	  Soft IP. It has up to 8 outbound and inbound windows
 	  for address translation and it is a PCIe Gen4 IP.
 
+config PCIE_HX
+	bool "Hx SoC PCIe controller"
+	depends on ARCH_HX
+	depends on OF
+	depends on PCI_MSI_IRQ_DOMAIN
+	select PCI_HOST_COMMON
+	help
+	  Say Y here if you want to enable support for the PCIe controller
+	  found in Hx series of SoCs.
+
 config PCIE_TANGO_SMP8759
 	bool "Tango SMP8759 PCIe controller (DANGEROUS)"
 	depends on ARCH_TANGO && PCI_MSI && OF

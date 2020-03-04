@@ -115,6 +115,11 @@ enum nvme_quirks {
 	 * Prevent tag overlap between queues
 	 */
 	NVME_QUIRK_SHARED_TAGS                  = (1 << 13),
+
+	/*
+	 * Needs special pre-initialization for Hx mobile NVMe.
+	 */
+	NVME_QUIRK_HX_NVME                      = (1 << 14),
 };
 
 /*
@@ -238,6 +243,7 @@ struct nvme_ctrl {
 	unsigned int kato;
 	bool subsystem;
 	unsigned long quirks;
+	void *quirk_data;
 	struct nvme_id_power_state psd[32];
 	struct nvme_effects_log *effects;
 	struct work_struct scan_work;
@@ -626,6 +632,36 @@ static inline void nvme_mpath_start_freeze(struct nvme_subsystem *subsys)
 {
 }
 #endif /* CONFIG_NVME_MULTIPATH */
+
+#ifdef CONFIG_ARCH_HX
+int nvme_hx_preinit(struct nvme_ctrl *ctrl, struct device *dev);
+int nvme_hx_preenable(struct nvme_ctrl *ctrl, struct device *dev);
+u32 nvme_hx_max_req_size(struct nvme_ctrl *ctrl);
+blk_status_t nvme_hx_map_data(struct nvme_ctrl *ctrl, struct request *req, struct nvme_command *cmnd);
+blk_status_t nvme_hx_unmap_data(struct nvme_ctrl *ctrl, struct request *req);
+#else
+static inline int nvme_hx_preinit(struct nvme_ctrl *ctrl, struct device *dev)
+{
+	dev_warn(dev, "Hx mobile NVMe is only supported on Hx SoCs.\n");
+	return 0;
+}
+static inline int nvme_hx_preenable(struct nvme_ctrl *ctrl, struct device *dev)
+{
+	return 0;
+}
+static inline u32 nvme_hx_max_req_size(struct nvme_ctrl *ctrl)
+{
+	return 0;
+}
+static inline blk_status_t nvme_hx_map_data(struct nvme_ctrl *ctrl, struct request *req, struct nvme_command *cmnd)
+{
+	return BLK_STS_NOTSUPP;
+}
+static inline blk_status_t nvme_hx_unmap_data(struct nvme_ctrl *ctrl, struct request *req)
+{
+	return BLK_STS_NOTSUPP;
+}
+#endif
 
 #ifdef CONFIG_NVM
 int nvme_nvm_register(struct nvme_ns *ns, char *disk_name, int node);

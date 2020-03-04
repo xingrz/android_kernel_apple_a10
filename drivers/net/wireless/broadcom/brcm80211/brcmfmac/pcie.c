@@ -4,6 +4,7 @@
  */
 
 #include <linux/kernel.h>
+#include <linux/random.h>
 #include <linux/module.h>
 #include <linux/firmware.h>
 #include <linux/pci.h>
@@ -48,6 +49,7 @@ enum brcmf_pcie_state {
 BRCMF_FW_DEF(43602, "brcmfmac43602-pcie");
 BRCMF_FW_DEF(4350, "brcmfmac4350-pcie");
 BRCMF_FW_DEF(4350C, "brcmfmac4350c2-pcie");
+BRCMF_FW_DEF(4355, "brcmfmac4355-pcie");
 BRCMF_FW_DEF(4356, "brcmfmac4356-pcie");
 BRCMF_FW_DEF(43570, "brcmfmac43570-pcie");
 BRCMF_FW_DEF(4358, "brcmfmac4358-pcie");
@@ -64,6 +66,7 @@ static const struct brcmf_firmware_mapping brcmf_pcie_fwnames[] = {
 	BRCMF_FW_ENTRY(BRCM_CC_4350_CHIP_ID, 0x000000FF, 4350C),
 	BRCMF_FW_ENTRY(BRCM_CC_4350_CHIP_ID, 0xFFFFFF00, 4350),
 	BRCMF_FW_ENTRY(BRCM_CC_43525_CHIP_ID, 0xFFFFFFF0, 4365C),
+	BRCMF_FW_ENTRY(BRCM_CC_4355_CHIP_ID, 0xFFFFFFFF, 4355),
 	BRCMF_FW_ENTRY(BRCM_CC_4356_CHIP_ID, 0xFFFFFFFF, 4356),
 	BRCMF_FW_ENTRY(BRCM_CC_43567_CHIP_ID, 0xFFFFFFFF, 43570),
 	BRCMF_FW_ENTRY(BRCM_CC_43569_CHIP_ID, 0xFFFFFFFF, 43570),
@@ -349,6 +352,15 @@ brcmf_pcie_read_reg32(struct brcmf_pciedev_info *devinfo, u32 reg_offset)
 }
 
 
+static u16
+brcmf_pcie_read_reg16(struct brcmf_pciedev_info *devinfo, u32 reg_offset)
+{
+	void __iomem *address = devinfo->regs + reg_offset;
+
+	return (ioread16(address));
+}
+
+
 static void
 brcmf_pcie_write_reg32(struct brcmf_pciedev_info *devinfo, u32 reg_offset,
 		       u32 value)
@@ -614,9 +626,115 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 }
 
 
+#define OTP_SIZE		64
+#define OTP_CC_ADDR_4355	0x38c0
+
+static void brcmf_pcie_process_otp_tuple(struct brcmf_pciedev_info *devinfo, u8 type, u8 size, u8 *data)
+{
+	char tmp[OTP_SIZE], t_chiprev[8] = "", t_module[8] = "", t_modrev[8] = "", t_vendor[8] = "";
+	unsigned i, len;
+
+	switch(type) {
+	case 0x15: /* system vendor OTP */
+		if(size < 4)
+			return;
+		if(*(u32 *)data != 8)
+			dev_warn(&devinfo->pdev->dev, "system vendor OTP header unexpected: %d\n", *(u32 *)data);
+		size -= 4;
+		data += 4;
+		while(size) {
+			if(data[0] == 0xFF)
+				break;
+			for(len=0; len<size; len++)
+				if(data[len] == 0x00 || data[len] == ' ' || data[len] == 0xFF)
+					break;
+			memcpy(tmp, data, len);
+			tmp[len] = 0;
+			data += len;
+			size -= len;
+			if(size) {
+				data ++;
+				size --;
+			}
+			brcmf_dbg(PCIE, "system vendor OTP element '%s'\n", tmp);
+
+			if(len < 2)
+				continue;
+			if(tmp[1] == '=' && len < 8)
+				switch(tmp[0]) {
+				case 's':
+					strcpy(t_chiprev, tmp + 2);
+					break;
+				case 'M':
+					strcpy(t_module, tmp + 2);
+					break;
+				case 'm':
+					strcpy(t_modrev, tmp + 2);
+					break;
+				case 'V':
+					strcpy(t_vendor, tmp + 2);
+					break;
+				}
+		}
+
+		dev_info(&devinfo->pdev->dev, "module revision data: chip %04x, chip rev %s, module %s, module rev %s, vendor %s\n", devinfo->ci->chip, t_chiprev, t_module, t_modrev, t_vendor);
+
+		if(t_chiprev[0])
+			sprintf(brcmf_otp_chip_id, "C-%04x__s-%s", devinfo->ci->chip, t_chiprev);
+		else
+			sprintf(brcmf_otp_chip_id, "C-%04x", devinfo->ci->chip);
+		sprintf(brcmf_otp_nvram_id, "M-%s_V-%s__m-%s", t_module, t_vendor, t_modrev);
+
+		break;
+	case 0x80: /* Broadcom CIS */
+		if(size < 1)
+			return;
+		switch(data[0]) {
+		case 0x83: /* serial number */
+			for(i=0; i<16 && i<size-1; i++)
+				sprintf(tmp + 2 * i, "%02x", data[i+1]);
+			dev_info(&devinfo->pdev->dev, "module serial number: %s\n", tmp);
+			break;
+		}
+		break;
+	}
+}
+
+static void brcmf_pcie_read_otp(struct brcmf_pciedev_info *devinfo)
+{
+	u8 otp[OTP_SIZE], type, size;
+	unsigned i;
+
+	if (devinfo->ci->chip == BRCM_CC_4355_CHIP_ID) {
+		/* for whatever reason, reading OTP works only once after reset */
+		if(brcmf_otp_chip_id[0])
+			return;
+
+		for(i=0; i<OTP_SIZE; i+=2)
+			((u16 *)otp)[i/2] = brcmf_pcie_read_reg16(devinfo, OTP_CC_ADDR_4355 + i);
+
+		i = 0;
+		while(i < OTP_SIZE - 1) {
+			type = otp[i];
+			if(!type) { /* null tuple */
+				i ++;
+				continue;
+			}
+			size = otp[i + 1];
+			i += 2;
+			if(i + size <= OTP_SIZE)
+				brcmf_pcie_process_otp_tuple(devinfo, type, size, otp + i);
+			i += size;
+		}
+	}
+}
+
+
 static void brcmf_pcie_attach(struct brcmf_pciedev_info *devinfo)
 {
 	u32 config;
+
+	brcmf_pcie_read_otp(devinfo);
 
 	/* BAR1 window may not be sized properly */
 	brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
@@ -1542,6 +1660,8 @@ brcmf_pcie_init_share_ram_info(struct brcmf_pciedev_info *devinfo,
 	return 0;
 }
 
+#define RANDOMBYTES_SIZE        264
+#define CLEAR_SIZE              256
 
 static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 					const struct firmware *fw, void *nvram,
@@ -1552,15 +1672,16 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	u32 sharedram_addr_written;
 	u32 loop_counter;
 	int err;
-	u32 address;
+	u32 address, clraddr;
 	u32 resetintr;
+	uint8_t randb[RANDOMBYTES_SIZE];
 
 	brcmf_dbg(PCIE, "Halt ARM.\n");
 	err = brcmf_pcie_enter_download_state(devinfo);
 	if (err)
 		return err;
 
-	brcmf_dbg(PCIE, "Download FW %s\n", devinfo->fw_name);
+	brcmf_dbg(PCIE, "Download FW %s 0x%x 0x%x\n", devinfo->fw_name, (unsigned)devinfo->ci->rambase, (unsigned)fw->size);
 	brcmf_pcie_copy_mem_todev(devinfo, devinfo->ci->rambase,
 				  (void *)fw->data, fw->size);
 
@@ -1573,20 +1694,38 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 	brcmf_pcie_write_ram32(devinfo, devinfo->ci->ramsize - 4, 0);
 
 	if (nvram) {
-		brcmf_dbg(PCIE, "Download NVRAM %s\n", devinfo->nvram_name);
 		address = devinfo->ci->rambase + devinfo->ci->ramsize -
 			  nvram_len;
+		brcmf_dbg(PCIE, "Download NVRAM %s 0x%x 0x%x\n", devinfo->nvram_name, address, nvram_len);
 		brcmf_pcie_copy_mem_todev(devinfo, address, nvram, nvram_len);
 		brcmf_fw_nvram_free(nvram);
+
+		address -= RANDOMBYTES_SIZE;
+		get_random_bytes(randb, RANDOMBYTES_SIZE - 8);
+		memcpy(randb + RANDOMBYTES_SIZE - 8, "\x00\x01\x00\x00\xde\xc0\xed\xfe", 8);
+		brcmf_pcie_copy_mem_todev(devinfo, address, randb, RANDOMBYTES_SIZE);
 	} else {
 		brcmf_dbg(PCIE, "No matching NVRAM file found %s\n",
 			  devinfo->nvram_name);
+		address = devinfo->ci->rambase + devinfo->ci->ramsize;
+	}
+
+	memset(randb, 0, CLEAR_SIZE);
+	clraddr = devinfo->ci->rambase + fw->size;
+	while(clraddr < address) {
+		u32 block = address - clraddr;
+		if(block > CLEAR_SIZE)
+			block = CLEAR_SIZE;
+		if(((clraddr + block - 1) ^ clraddr) & -CLEAR_SIZE)
+			block = (CLEAR_SIZE - clraddr) & (CLEAR_SIZE - 1);
+		brcmf_pcie_copy_mem_todev(devinfo, clraddr, randb, block);
+		clraddr += block;
 	}
 
 	sharedram_addr_written = brcmf_pcie_read_ram32(devinfo,
 						       devinfo->ci->ramsize -
 						       4);
-	brcmf_dbg(PCIE, "Bring ARM in running state\n");
+	brcmf_dbg(PCIE, "Bring ARM in running state (RAM sign: 0x%08x)\n", sharedram_addr_written);
 	err = brcmf_pcie_exit_download_state(devinfo, resetintr);
 	if (err)
 		return err;
@@ -1891,6 +2030,16 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		goto fail;
 	}
 
+	if(devinfo->ci->chip == BRCM_CC_4355_CHIP_ID) {
+		brcmf_pcie_read_otp(devinfo);
+
+		if(!brcmf_mac_addr[0]) {
+			dev_info(&pdev->dev, "hardware discovery complete, not starting driver\n");
+			ret = -ENODEV;
+			goto exit;
+		}
+	}
+
 	pcie_bus_dev = kzalloc(sizeof(*pcie_bus_dev), GFP_KERNEL);
 	if (pcie_bus_dev == NULL) {
 		ret = -ENOMEM;
@@ -1951,6 +2100,7 @@ fail_bus:
 	kfree(bus);
 fail:
 	brcmf_err(NULL, "failed %x:%x\n", pdev->vendor, pdev->device);
+exit:
 	brcmf_pcie_release_resource(devinfo);
 	if (devinfo->ci)
 		brcmf_chip_detach(devinfo->ci);
@@ -2115,6 +2265,7 @@ static const struct pci_device_id brcmf_pcie_devid_table[] = {
 	BRCMF_PCIE_DEVICE(BRCM_PCIE_4366_2G_DEVICE_ID),
 	BRCMF_PCIE_DEVICE(BRCM_PCIE_4366_5G_DEVICE_ID),
 	BRCMF_PCIE_DEVICE(BRCM_PCIE_4371_DEVICE_ID),
+	BRCMF_PCIE_DEVICE(BRCM_PCIE_4355_5G_DEVICE_ID),
 	{ /* end: all zeroes */ }
 };
 

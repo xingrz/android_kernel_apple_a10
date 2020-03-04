@@ -1065,6 +1065,13 @@ config HTC_EGPIO
 	  several HTC phones.  It provides basic support for input
 	  pins, output pins, and irqs.
 
+config GPIO_HX_PMU_I2C
+	bool "Hx PMU GPIO support"
+	depends on GPIOLIB && HX_PMU_I2C
+	help
+	  This driver supports the GPIOs controlled by I2C-based PMUs found
+	  on phones with Hx series SoCs.
+
 config GPIO_JANZ_TTL
 	tristate "Janz VMOD-TTL Digital IO Module"
 	depends on MFD_JANZ_CMODIO

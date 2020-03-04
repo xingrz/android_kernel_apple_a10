@@ -91,3 +91,17 @@ asmlinkage void notrace asm_nmi_exit(void)
 	nmi_exit();
 }
 NOKPROBE_SYMBOL(asm_nmi_exit);
+
+/*
+ * Analogous to the generic handle_arch_irq / set_handle_irq
+ */
+void (*handle_arch_fiq)(struct pt_regs *) __ro_after_init;
+
+int __init set_handle_fiq(void (*handle_fiq)(struct pt_regs *))
+{
+	if (handle_arch_fiq)
+		return -EBUSY;
+
+	handle_arch_fiq = handle_fiq;
+	return 0;
+}

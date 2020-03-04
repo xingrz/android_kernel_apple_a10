@@ -82,7 +82,7 @@ static __always_inline u64 __arch_get_hw_counter(s32 clock_mode)
 	 * is speculated.
 	 */
 	isb();
-	asm volatile("mrs %0, cntvct_el0" : "=r" (res) :: "memory");
+	asm volatile("mrs %0, cntpct_el0" : "=r" (res) :: "memory");
 	/*
 	 * This isb() is required to prevent that the seq lock is
 	 * speculated.#

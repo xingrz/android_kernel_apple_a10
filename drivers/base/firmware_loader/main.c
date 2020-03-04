@@ -481,12 +481,19 @@ fw_get_filesystem_firmware(struct device *device, struct fw_priv *fw_priv,
 		return -ENOMEM;
 
 	for (i = 0; i < ARRAY_SIZE(fw_path); i++) {
-		/* skip the unset customized path */
-		if (!fw_path[i][0])
-			continue;
-
-		len = snprintf(path, PATH_MAX, "%s/%s%s",
-			       fw_path[i], fw_priv->fw_name, suffix);
+		if(fw_priv->fw_name[0] == '/') {
+			if(i) {
+				rc = -ENOENT;
+				break;
+			}
+			len = snprintf(path, PATH_MAX, "%s%s", fw_priv->fw_name, suffix);
+		} else {
+			/* skip the unset customized path */
+			if (!fw_path[i][0])
+				continue;
+			len = snprintf(path, PATH_MAX, "%s/%s%s",
+				       fw_path[i], fw_priv->fw_name, suffix);
+		}
 		if (len >= PATH_MAX) {
 			rc = -ENAMETOOLONG;
 			break;

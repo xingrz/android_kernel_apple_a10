@@ -1572,6 +1572,22 @@ config SERIAL_MILBEAUT_USIO_CONSOLE
 	  receives all kernel messages and warnings and which allows logins in
 	  single user mode).
 
+config SERIAL_HX_UART
+	tristate "Hx serial port support"
+	depends on ARCH_HX || (COMPILE_TEST && OF)
+	default ARCH_HX
+	select SERIAL_CORE
+	select SERIAL_CORE_CONSOLE
+	select SERIAL_EARLYCON
+	help
+	  Select this to add support for Hx chip serial ports, including console.
+
+config SERIAL_HX_UART_PORTS
+	int "Maximum number of UART ports (1-16)"
+	range 1 16
+	depends on SERIAL_HX_UART
+	default "8"
+
 endmenu
 
 config SERIAL_MCTRL_GPIO
