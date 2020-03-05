@@ -523,7 +523,7 @@ static int bcm_flush(struct hci_uart *hu)
 static int bcm_setup(struct hci_uart *hu)
 {
 	struct bcm_data *bcm = hu->priv;
-	char fw_name[64];
+	char fw_name[256];
 	const struct firmware *fw;
 	unsigned int speed;
 	int err;
