@@ -20,6 +20,7 @@
 #include <linux/serial_core.h>
 #include <linux/tty.h>
 #include <linux/tty_flip.h>
+#include <linux/pinctrl/consumer.h>
 
 #define REG_ULCON                       0x000
 #define   REG_ULCON_IRDA                (1 << 6)
@@ -343,7 +344,10 @@ static void hx_uart_set_termios(struct uart_port *port, struct ktermios *termios
         port->ignore_status_mask |= REG_UERSTAT_BREAK;
 
     writel(ulcon, port->membase + REG_ULCON);
-    writel(REG_UMCON_RTS, port->membase + REG_UMCON);
+    if(termios->c_cflag & CRTSCTS)
+        writel(REG_UMCON_RTS | REG_UMCON_AUTOFC_EN, port->membase + REG_UMCON);
+    else
+        writel(REG_UMCON_RTS, port->membase + REG_UMCON);
     writel((quot >> 4) - 1, port->membase + REG_UBRDIV);
     writel(quot & 15, port->membase + REG_UFRACVAL);
 
@@ -468,6 +472,7 @@ static int hx_uart_probe(struct platform_device *pdev)
     struct clk *clk = devm_clk_get(&pdev->dev, NULL);
     struct uart_port *port;
     struct resource *res;
+    struct pinctrl *pctrl;
     int index = 0;
     int ret;
 
@@ -504,6 +509,12 @@ static int hx_uart_probe(struct platform_device *pdev)
     port->line = index;
     port->ops = &hx_uart_ops;
     port->dev = &pdev->dev;
+
+    if(of_find_property(pdev->dev.of_node, "pinctrl-names", NULL)) {
+        pctrl = devm_pinctrl_get_select_default(&pdev->dev);
+        if(IS_ERR(pctrl))
+            return PTR_ERR(pctrl);
+    }
 
     ret = uart_add_one_port(&hx_uart_uart_driver, port);
     if (ret) {

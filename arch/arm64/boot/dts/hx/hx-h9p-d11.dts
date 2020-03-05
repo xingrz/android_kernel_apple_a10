@@ -312,6 +312,11 @@
                 function = "periph";
             };
 
+            uart1_pins: uart1_pins {
+                pins = "gpio96", "gpio98";
+                function = "periph";
+            };
+
             pcie_clkreq_pins: pcie_clkreq_pins {
                 pins = "gpio16", "gpio17", "gpio18", "gpio19";
                 function = "periph";
@@ -325,6 +330,25 @@
             clocks = <&refclk24mhz>;
             clock-names = "refclk";
             index = <0>;
+        };
+
+        uart1: serial@20a0c4000 {
+            compatible = "hx,uart";
+            reg = <0x2 0x0a0c4000 0x0 0x4000>;
+            interrupts = <0 219 4>;
+            clocks = <&refclk24mhz>;
+            clock-names = "refclk";
+            index = <1>;
+            pinctrl-0 = <&uart1_pins>;
+            pinctrl-names = "default";
+
+            bluetooth {
+                compatible = "brcm,bcm4345c5";
+                device-wakeup-gpios = <&gpio 87 0>;
+                host-wakeup-gpios = <&pmu_gpio 11 0>;
+                shutdown-gpios = <&pmu_gpio 8 0>;
+                max-speed = <115200>;
+            };
         };
 
         uart5: serial@20a0d4000 {
