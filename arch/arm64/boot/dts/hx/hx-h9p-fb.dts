@@ -358,7 +358,7 @@
                 device-wakeup-gpios = <&gpio 87 0>;
                 host-wakeup-gpios = <&pmu_gpio 11 0>;
                 shutdown-gpios = <&pmu_gpio 8 0>;
-                max-speed = <115200>;
+                max-speed = <1500000>;
             };
         };
 
