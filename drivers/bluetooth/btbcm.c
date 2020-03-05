@@ -17,6 +17,17 @@
 
 #define VERSION "0.1"
 
+#define BTBCM_FW_ALTPATH_LEN	256
+char btbcm_firmware_path[BTBCM_FW_ALTPATH_LEN];
+module_param_string(alternative_fw_path, btbcm_firmware_path,
+		    BTBCM_FW_ALTPATH_LEN, 0600);
+MODULE_PARM_DESC(alternative_fw_path, "Alternative firmware path");
+
+char btbcm_mac_addr[18];
+module_param_string(mac_addr, btbcm_mac_addr,
+			18, 0600);
+MODULE_PARM_DESC(mac_addr, "Set MAC address on boot");
+
 #define BDADDR_BCM20702A0 (&(bdaddr_t) {{0x00, 0xa0, 0x02, 0x70, 0x20, 0x00}})
 #define BDADDR_BCM20702A1 (&(bdaddr_t) {{0x00, 0x00, 0xa0, 0x02, 0x70, 0x20}})
 #define BDADDR_BCM2076B1 (&(bdaddr_t) {{0x79, 0x56, 0x00, 0xa0, 0x76, 0x20}})
@@ -25,12 +36,15 @@
 #define BDADDR_BCM4330B1 (&(bdaddr_t) {{0x00, 0x00, 0x00, 0xb1, 0x30, 0x43}})
 #define BDADDR_BCM4345C5 (&(bdaddr_t) {{0xac, 0x1f, 0x00, 0xc5, 0x45, 0x43}})
 #define BDADDR_BCM43341B (&(bdaddr_t) {{0xac, 0x1f, 0x00, 0x1b, 0x34, 0x43}})
+#define BDADDR_BCM4355C0 (&(bdaddr_t) {{0xac, 0x1f, 0x00, 0xc0, 0x55, 0x43}})
 
 int btbcm_check_bdaddr(struct hci_dev *hdev)
 {
 	struct hci_rp_read_bd_addr *bda;
 	struct sk_buff *skb;
+	int retries = 3;
 
+retry:
 	skb = __hci_cmd_sync(hdev, HCI_OP_READ_BD_ADDR, 0, NULL,
 			     HCI_INIT_TIMEOUT);
 	if (IS_ERR(skb)) {
@@ -46,6 +60,23 @@ int btbcm_check_bdaddr(struct hci_dev *hdev)
 	}
 
 	bda = (struct hci_rp_read_bd_addr *)skb->data;
+
+	if(btbcm_mac_addr[0]) {
+		bdaddr_t nbda;
+		unsigned na[6], i;
+		if(sscanf(btbcm_mac_addr, "%x:%x:%x:%x:%x:%x", &na[0], &na[1], &na[2], &na[3], &na[4], &na[5]) == 6) {
+			for(i=0; i<6; i++)
+				nbda.b[i] = na[5 - i];
+			if(bacmp(&bda->bdaddr, &nbda)) {
+				kfree_skb(skb);
+				btbcm_set_bdaddr(hdev, &nbda);
+				if(retries > 0) {
+					retries --;
+					goto retry;
+				}
+			}
+		}
+	}
 
 	/* Check if the address indicates a controller with either an
 	 * invalid or default address. In both cases the device needs
@@ -76,7 +107,8 @@ int btbcm_check_bdaddr(struct hci_dev *hdev)
 	    !bacmp(&bda->bdaddr, BDADDR_BCM4330B1) ||
 	    !bacmp(&bda->bdaddr, BDADDR_BCM4345C5) ||
 	    !bacmp(&bda->bdaddr, BDADDR_BCM43430A0) ||
-	    !bacmp(&bda->bdaddr, BDADDR_BCM43341B)) {
+	    !bacmp(&bda->bdaddr, BDADDR_BCM43341B) ||
+	    !bacmp(&bda->bdaddr, BDADDR_BCM4355C0)) {
 		bt_dev_info(hdev, "BCM: Using default device address (%pMR)",
 			    &bda->bdaddr);
 		set_bit(HCI_QUIRK_INVALID_BDADDR, &hdev->quirks);
@@ -339,6 +371,7 @@ static const struct bcm_subver_table bcm_uart_subver_table[] = {
 	{ 0x220e, "BCM20702A1"  },	/* 001.002.014 */
 	{ 0x4217, "BCM4329B1"   },	/* 002.002.023 */
 	{ 0x6106, "BCM4359C0"	},	/* 003.001.006 */
+	{ 0x6103, "BCM4355C0"	},	/* 003.001.003 */
 	{ }
 };
 
@@ -412,10 +445,10 @@ int btbcm_initialize(struct hci_dev *hdev, char *fw_name, size_t len,
 		pid = get_unaligned_le16(skb->data + 3);
 		kfree_skb(skb);
 
-		snprintf(fw_name, len, "brcm/%s-%4.4x-%4.4x.hcd",
-			 hw_name, vid, pid);
+		snprintf(fw_name, len, "%sbrcm/%s-%4.4x-%4.4x.hcd",
+			 btbcm_firmware_path, hw_name, vid, pid);
 	} else {
-		snprintf(fw_name, len, "brcm/%s.hcd", hw_name);
+		snprintf(fw_name, len, "%sbrcm/%s.hcd", btbcm_firmware_path, hw_name);
 	}
 
 	bt_dev_info(hdev, "%s (%3.3u.%3.3u.%3.3u) build %4.4u",
