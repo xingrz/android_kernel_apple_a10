@@ -47,7 +47,9 @@ enum brcmf_pcie_state {
 };
 
 BRCMF_FW_DEF(43602, "brcmfmac43602-pcie");
+BRCMF_FW_DEF(43452, "brcmfmac43452-pcie");
 BRCMF_FW_DEF(4350, "brcmfmac4350-pcie");
+BRCMF_FW_DEF(43502, "brcmfmac43502-pcie");
 BRCMF_FW_DEF(4350C, "brcmfmac4350c2-pcie");
 BRCMF_FW_DEF(4355, "brcmfmac4355-pcie");
 BRCMF_FW_DEF(4356, "brcmfmac4356-pcie");
@@ -62,6 +64,7 @@ BRCMF_FW_DEF(4371, "brcmfmac4371-pcie");
 
 static const struct brcmf_firmware_mapping brcmf_pcie_fwnames[] = {
 	BRCMF_FW_ENTRY(BRCM_CC_43602_CHIP_ID, 0xFFFFFFFF, 43602),
+	BRCMF_FW_ENTRY(BRCM_CC_4345_CHIP_ID, 0xFFFFFF00, 43452),
 	BRCMF_FW_ENTRY(BRCM_CC_43465_CHIP_ID, 0xFFFFFFF0, 4366C),
 	BRCMF_FW_ENTRY(BRCM_CC_4350_CHIP_ID, 0x000000FF, 4350C),
 	BRCMF_FW_ENTRY(BRCM_CC_4350_CHIP_ID, 0xFFFFFF00, 4350),
@@ -631,7 +634,7 @@ static void brcmf_pcie_reset_device(struct brcmf_pciedev_info *devinfo)
 
 static void brcmf_pcie_process_otp_tuple(struct brcmf_pciedev_info *devinfo, u8 type, u8 size, u8 *data)
 {
-	char tmp[OTP_SIZE], t_chiprev[8] = "", t_module[8] = "", t_modrev[8] = "", t_vendor[8] = "";
+	char tmp[OTP_SIZE], t_chiprev[8] = "", t_module[8] = "", t_modrev[8] = "", t_vendor[8] = "", t_chip[8] = "";
 	unsigned i, len;
 
 	switch(type) {
@@ -677,12 +680,16 @@ static void brcmf_pcie_process_otp_tuple(struct brcmf_pciedev_info *devinfo, u8 
 				}
 		}
 
-		dev_info(&devinfo->pdev->dev, "module revision data: chip %04x, chip rev %s, module %s, module rev %s, vendor %s\n", devinfo->ci->chip, t_chiprev, t_module, t_modrev, t_vendor);
+		if(devinfo->ci->chip == BRCM_CC_4345_CHIP_ID) /* internally, this chip calls itself 4345 but externally it's a 43452 */
+			sprintf(t_chip, "43452");
+		else
+			sprintf(t_chip, (devinfo->ci->chip > 40000) ? "%05d" : "%04x", devinfo->ci->chip);
+		dev_info(&devinfo->pdev->dev, "module revision data: chip %s, chip rev %s, module %s, module rev %s, vendor %s\n", t_chip, t_chiprev, t_module, t_modrev, t_vendor);
 
 		if(t_chiprev[0])
-			sprintf(brcmf_otp_chip_id, "C-%04x__s-%s", devinfo->ci->chip, t_chiprev);
+			sprintf(brcmf_otp_chip_id, "C-%s__s-%s", t_chip, t_chiprev);
 		else
-			sprintf(brcmf_otp_chip_id, "C-%04x", devinfo->ci->chip);
+			sprintf(brcmf_otp_chip_id, "C-%s", t_chip);
 		sprintf(brcmf_otp_nvram_id, "M-%s_V-%s__m-%s", t_module, t_vendor, t_modrev);
 
 		break;
@@ -705,7 +712,7 @@ static void brcmf_pcie_read_otp(struct brcmf_pciedev_info *devinfo)
 	u8 otp[OTP_SIZE], type, size;
 	unsigned i;
 
-	if (devinfo->ci->chip == BRCM_CC_4355_CHIP_ID) {
+	if (devinfo->ci->chip == BRCM_CC_4355_CHIP_ID || devinfo->ci->chip == BRCM_CC_4345_CHIP_ID) {
 		/* for whatever reason, reading OTP works only once after reset */
 		if(brcmf_otp_chip_id[0])
 			return;
@@ -2030,7 +2037,7 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		goto fail;
 	}
 
-	if(devinfo->ci->chip == BRCM_CC_4355_CHIP_ID) {
+	if(devinfo->ci->chip == BRCM_CC_4355_CHIP_ID || devinfo->ci->chip == BRCM_CC_4345_CHIP_ID) {
 		brcmf_pcie_read_otp(devinfo);
 
 		if(!brcmf_mac_addr[0]) {
@@ -2266,6 +2273,7 @@ static const struct pci_device_id brcmf_pcie_devid_table[] = {
 	BRCMF_PCIE_DEVICE(BRCM_PCIE_4366_5G_DEVICE_ID),
 	BRCMF_PCIE_DEVICE(BRCM_PCIE_4371_DEVICE_ID),
 	BRCMF_PCIE_DEVICE(BRCM_PCIE_4355_5G_DEVICE_ID),
+	BRCMF_PCIE_DEVICE(BRCM_PCIE_4345_DEVICE_ID),
 	{ /* end: all zeroes */ }
 };
 

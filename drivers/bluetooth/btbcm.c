@@ -37,6 +37,7 @@ MODULE_PARM_DESC(mac_addr, "Set MAC address on boot");
 #define BDADDR_BCM4345C5 (&(bdaddr_t) {{0xac, 0x1f, 0x00, 0xc5, 0x45, 0x43}})
 #define BDADDR_BCM43341B (&(bdaddr_t) {{0xac, 0x1f, 0x00, 0x1b, 0x34, 0x43}})
 #define BDADDR_BCM4355C0 (&(bdaddr_t) {{0xac, 0x1f, 0x00, 0xc0, 0x55, 0x43}})
+#define BDADDR_BCM4345C1 (&(bdaddr_t) {{0xac, 0x1f, 0x00, 0xc1, 0x45, 0x43}})
 
 int btbcm_check_bdaddr(struct hci_dev *hdev)
 {
@@ -108,7 +109,8 @@ retry:
 	    !bacmp(&bda->bdaddr, BDADDR_BCM4345C5) ||
 	    !bacmp(&bda->bdaddr, BDADDR_BCM43430A0) ||
 	    !bacmp(&bda->bdaddr, BDADDR_BCM43341B) ||
-	    !bacmp(&bda->bdaddr, BDADDR_BCM4355C0)) {
+	    !bacmp(&bda->bdaddr, BDADDR_BCM4355C0) ||
+	    !bacmp(&bda->bdaddr, BDADDR_BCM4345C1)) {
 		bt_dev_info(hdev, "BCM: Using default device address (%pMR)",
 			    &bda->bdaddr);
 		set_bit(HCI_QUIRK_INVALID_BDADDR, &hdev->quirks);
@@ -372,6 +374,7 @@ static const struct bcm_subver_table bcm_uart_subver_table[] = {
 	{ 0x4217, "BCM4329B1"   },	/* 002.002.023 */
 	{ 0x6106, "BCM4359C0"	},	/* 003.001.006 */
 	{ 0x6103, "BCM4355C0"	},	/* 003.001.003 */
+	{ 0x6206, "BCM4345C1"	},	/* 003.002.006 */
 	{ }
 };
 
