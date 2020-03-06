@@ -44,18 +44,29 @@
 #define REG_CPUPM_CPU0          0x7000
 #define REG_CPUPM_CPU1          0x7200
 
+struct hx_cpufreq_config {
+    unsigned num_states;
+    const u8 *dvfm_vset;
+    const u8 *dvfm_set1;
+    const u8 *dvfm_set2;
+    struct cpufreq_frequency_table *cpufreq_table;
+};
+
 #define NUM_BASES       8
 struct hx_cpufreq_data {
     void __iomem *base[NUM_BASES];
+    const struct hx_cpufreq_config *cfg;
 };
 
-#define NUM_STATES              12
-static const u8 dvfm_vset[NUM_STATES] = { 0x00, 0x00, 0x37, 0x3B, 0x4F, 0x40, 0x4C, 0x5F, 0x71, 0x8F, 0xB5, 0xB5 };
-static const u8 dvfm_set1[NUM_STATES] = { 0x00, 0x00, 0x0A, 0x05, 0x04, 0x1F, 0x15, 0x10, 0x0D, 0x0B, 0x09, 0x09 };
-static const u8 dvfm_set2[NUM_STATES] = { 0x00, 0x00, 0x12, 0x0A, 0x06, 0x09, 0x07, 0x05, 0x04, 0x03, 0x03, 0x03 };
+/* frequency table for fast devices */
+
+#define NUM_STATES_FAST         12
+static const u8 hx_cpufreq_dvfm_vset_fast[NUM_STATES_FAST] = { 0x00, 0x00, 0x37, 0x3B, 0x4F, 0x40, 0x4C, 0x5F, 0x71, 0x8F, 0xB5, 0xB5 };
+static const u8 hx_cpufreq_dvfm_set1_fast[NUM_STATES_FAST] = { 0x00, 0x00, 0x0A, 0x05, 0x04, 0x1F, 0x15, 0x10, 0x0D, 0x0B, 0x09, 0x09 };
+static const u8 hx_cpufreq_dvfm_set2_fast[NUM_STATES_FAST] = { 0x00, 0x00, 0x12, 0x0A, 0x06, 0x09, 0x07, 0x05, 0x04, 0x03, 0x03, 0x03 };
 
 /* E-core frequencies are adjusted to match measured performance to produce a linear "frequency" table */
-static struct cpufreq_frequency_table hx_cpufreq_table[NUM_STATES + 1] = {
+static struct cpufreq_frequency_table hx_cpufreq_table_fast[NUM_STATES_FAST + 1] = {
     { .frequency = CPUFREQ_ENTRY_INVALID },
     { .frequency = CPUFREQ_ENTRY_INVALID },
     { .frequency =  149000 }, /*  396 MHz, E-core */
@@ -69,6 +80,39 @@ static struct cpufreq_frequency_table hx_cpufreq_table[NUM_STATES + 1] = {
     { .frequency = 2244000 }, /* 2244 MHz, P-core */
     { .frequency = 2340000 }, /* 2340 MHz, P-core */
     { .frequency = CPUFREQ_TABLE_END } };
+
+static const struct hx_cpufreq_config hx_cpufreq_config_fast = {
+    .num_states = NUM_STATES_FAST,
+    .dvfm_vset = hx_cpufreq_dvfm_vset_fast,
+    .dvfm_set1 = hx_cpufreq_dvfm_set1_fast,
+    .dvfm_set2 = hx_cpufreq_dvfm_set2_fast,
+    .cpufreq_table = hx_cpufreq_table_fast };
+
+/* frequency table for slow devices */
+
+#define NUM_STATES_SLOW         9
+static const u8 hx_cpufreq_dvfm_vset_slow[NUM_STATES_SLOW] = { 0x00, 0x00, 0x37, 0x3B, 0x4F, 0x40, 0x4C, 0x5F, 0x71 };
+static const u8 hx_cpufreq_dvfm_set1_slow[NUM_STATES_SLOW] = { 0x00, 0x00, 0x0A, 0x05, 0x04, 0x1F, 0x15, 0x10, 0x0D };
+static const u8 hx_cpufreq_dvfm_set2_slow[NUM_STATES_SLOW] = { 0x00, 0x00, 0x12, 0x0A, 0x06, 0x09, 0x07, 0x05, 0x04 };
+
+static struct cpufreq_frequency_table hx_cpufreq_table_slow[NUM_STATES_SLOW + 1] = {
+    { .frequency = CPUFREQ_ENTRY_INVALID },
+    { .frequency = CPUFREQ_ENTRY_INVALID },
+    { .frequency =  149000 }, /*  396 MHz, E-core */
+    { .frequency =  275000 }, /*  732 MHz, E-core */
+    { .frequency =  410000 }, /* 1092 MHz, E-core */
+    { .frequency =  756000 }, /*  756 MHz, P-core */
+    { .frequency = 1056000 }, /* 1056 MHz, P-core */
+    { .frequency = 1356000 }, /* 1356 MHz, P-core */
+    { .frequency = 1644000 }, /* 1644 MHz, P-core */
+    { .frequency = CPUFREQ_TABLE_END } };
+
+static const struct hx_cpufreq_config hx_cpufreq_config_slow = {
+    .num_states = NUM_STATES_SLOW,
+    .dvfm_vset = hx_cpufreq_dvfm_vset_slow,
+    .dvfm_set1 = hx_cpufreq_dvfm_set1_slow,
+    .dvfm_set2 = hx_cpufreq_dvfm_set2_slow,
+    .cpufreq_table = hx_cpufreq_table_slow };
 
 static inline void __iomem *hx_cpufreq_reg(struct hx_cpufreq_data *hc, unsigned reg)
 {
@@ -107,8 +151,8 @@ static int hx_cpufreq_set_target(struct cpufreq_policy *policy, unsigned int ind
 
     if(index < 2)
         index = 2;
-    if(index > NUM_STATES - 1)
-        index = NUM_STATES - 1;
+    if(index > hc->cfg->num_states - 1)
+        index = hc->cfg->num_states - 1;
 
     hx_cpufreq_writeq(hc, REG_PSINFO_SET1, (hx_cpufreq_readq(hc, REG_PSINFO_GET1(index)) & 0xFF00000000800000ul) |
                                            (hx_cpufreq_readq(hc, REG_PSINFO_SET1_DFLT)  & ~0xFF00000000800000ul));
@@ -135,10 +179,10 @@ static int hx_cpufreq_init(struct cpufreq_policy *policy)
 {
     struct hx_cpufreq_data *hc = cpufreq_get_driver_data();
 
-    hx_cpufreq_write_dvfm_set(hc, REG_DVFM_VSET_LO, REG_DVFM_VSET_HI, dvfm_vset, NUM_STATES);
-    hx_cpufreq_write_dvfm_set(hc, REG_DVFM_SET1_LO, REG_DVFM_SET1_HI, dvfm_set1, NUM_STATES);
-    hx_cpufreq_write_dvfm_set(hc, REG_DVFM_SET2_LO, REG_DVFM_SET2_HI, dvfm_set2, NUM_STATES);
-    hx_cpufreq_write_dvfm_set(hc, REG_DVFM_MASK_LO, REG_DVFM_MASK_HI, NULL, NUM_STATES);
+    hx_cpufreq_write_dvfm_set(hc, REG_DVFM_VSET_LO, REG_DVFM_VSET_HI, hc->cfg->dvfm_vset, hc->cfg->num_states);
+    hx_cpufreq_write_dvfm_set(hc, REG_DVFM_SET1_LO, REG_DVFM_SET1_HI, hc->cfg->dvfm_set1, hc->cfg->num_states);
+    hx_cpufreq_write_dvfm_set(hc, REG_DVFM_SET2_LO, REG_DVFM_SET2_HI, hc->cfg->dvfm_set2, hc->cfg->num_states);
+    hx_cpufreq_write_dvfm_set(hc, REG_DVFM_MASK_LO, REG_DVFM_MASK_HI, NULL, hc->cfg->num_states);
     hx_cpufreq_writeq(hc, REG_ACC_CLK_ENABLE1, 0x15);
     hx_cpufreq_rmwl(hc, REG_PSTATE_CTRL, 0x1F00, 0);
     hx_cpufreq_writel(hc, REG_PSTATE_SET1, hx_cpufreq_readq(hc, REG_PSINFO_GET1(2)) >> 56);
@@ -163,9 +207,9 @@ static int hx_cpufreq_init(struct cpufreq_policy *policy)
 
     cpumask_copy(policy->cpus, cpu_online_mask);
     policy->driver_data = hc;
-    policy->freq_table = hx_cpufreq_table;
+    policy->freq_table = hc->cfg->cpufreq_table;
     policy->cpuinfo.transition_latency = 100;
-    policy->cur = hx_cpufreq_table[2].frequency;
+    policy->cur = hc->cfg->cpufreq_table[2].frequency;
 
     return 0;
 }
@@ -184,6 +228,7 @@ static int hx_cpufreq_probe(struct platform_device *pdev)
     struct hx_cpufreq_data *hc;
     struct resource *res;
     unsigned int i = 0, err;
+    const char *mode = NULL;
 
     hc = devm_kzalloc(&pdev->dev, sizeof(*hc), GFP_KERNEL);
     if(!hc)
@@ -196,6 +241,12 @@ static int hx_cpufreq_probe(struct platform_device *pdev)
             err = PTR_ERR(hc->base[i]);
             return err;
         }
+    }
+
+    hc->cfg = &hx_cpufreq_config_fast;
+    if(!of_property_read_string(pdev->dev.of_node, "mode", &mode)) {
+        if(!strcmp(mode, "slow"))
+            hc->cfg = &hx_cpufreq_config_slow;
     }
 
     hx_cpufreq_driver.driver_data = hc;
