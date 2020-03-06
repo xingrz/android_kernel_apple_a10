@@ -411,9 +411,9 @@
                 };
             };
 
-            backlight: lm3539@62 {
-                compatible = "dwi,lm3539";
-                reg = <0x62>;
+            backlight: lm3534@63 {
+                compatible = "dwi,lm3534";
+                reg = <0x63>;
                 dwi = <&dwi>;
                 lcd-supply = <&mipi_dsi>;
             };
@@ -474,7 +474,7 @@
             charger: sn2400@75 {
                 compatible = "charger,sn2400";
                 reg = <0x75>;
-                charge-current = <1950>;
+                charge-current = <1150>;
             };
         };
 
@@ -537,6 +537,7 @@
                 cs-gpios = <&gpio 81 0>;
                 irq-gpios = <&gpio 166 1>;
                 clocks = <&touchclk>;
+                generation = <1>;
             };
         };
 
@@ -661,10 +662,10 @@
             linux,code = <114>;
         };
 
-        ringerab {
-            label = "Ringer AB";
+        home {
+            label = "Home";
             gpios = <&gpio 86 1>;
-            linux,code = <113>;
+            linux,code = <102>;
         };
 
         hold {

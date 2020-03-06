@@ -207,6 +207,7 @@ static int lm3539_dwi_probe(struct i2c_client *client, const struct i2c_device_i
 }
 
 static const struct of_device_id lm3539_dwi_of_match[] = {
+    { .compatible = "dwi,lm3534" },
     { .compatible = "dwi,lm3539" },
     { }
 };

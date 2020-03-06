@@ -37,6 +37,7 @@ struct hx_mipi_dsi {
         u32 vfp_lines;
         u32 clkmgr_cfg;
         u32 phy_if_cfg;
+        u32 vid_if_cfg[5];
     } setup;
 };
 
@@ -168,6 +169,11 @@ struct hx_mipi_dsi {
 #define DWM_INT_ST1                             0xc0
 #define DWM_INT_MSK0                            0xc4
 #define DWM_INT_MSK1                            0xc8
+#define DWM_VID_IF_CFG0                         0x80028
+#define DWM_VID_IF_CFG1                         0x8002c
+#define DWM_VID_IF_CFG2                         0x80030
+#define DWM_VID_IF_CFG3                         0x80034
+#define DWM_VID_IF_CFG4                         0x80038
 
 #define DTYPE_DCS_WRITE                         0x05 /* short write, 0 parameter */
 #define DTYPE_DCS_WRITE1                        0x15 /* short write, 1 parameter */
@@ -396,19 +402,19 @@ static void hx_mipi_dsi_turn_on(struct hx_mipi_dsi *md)
     hx_mipi_dsi_rmwl(md, 0x80034, 0, 0x10000000);
     hx_mipi_dsi_writel(md, DWM_PWR_UP, DWM_PWR_UP_ON);
     hx_mipi_dsi_writel(md, DWM_PHY_RSTZ, DWM_PHY_RSTZ_ENABLECLK);
-    hx_mipi_dsi_rmwl(md, 0x80034, 0, 0x02000000 | (0x1B << 4));
+    hx_mipi_dsi_rmwl(md, 0x80034, 0, 0x02000000 | (md->setup.vid_if_cfg[3] & 0xFF0));
     hx_mipi_dsi_rmwl(md, 0x80034, 0, 4);
     hx_mipi_dsi_wait_phy_init(md);
-    hx_mipi_dsi_writel(md, 0x80038, 0x04228300);
+    hx_mipi_dsi_writel(md, DWM_VID_IF_CFG4, md->setup.vid_if_cfg[4]);
     usleep_range(100, 500);
     hx_mipi_dsi_rmwl(md, 0x80034, 0, 0x08000000);
     usleep_range(100, 500);
     hx_mipi_dsi_rmwl(md, 0x80034, 0x08000000, 0);
     usleep_range(100, 500);
-    hx_mipi_dsi_writel(md, 0x8002c, 0x02010002);
-    hx_mipi_dsi_writel(md, 0x80030, 0x06010231);
+    hx_mipi_dsi_writel(md, DWM_VID_IF_CFG1, md->setup.vid_if_cfg[1]);
+    hx_mipi_dsi_writel(md, DWM_VID_IF_CFG2, md->setup.vid_if_cfg[2]);
     hx_mipi_dsi_rmwl(md, 0x80034, 0x10000000, 0);
-    hx_mipi_dsi_writel(md, 0x80028, 5);
+    hx_mipi_dsi_writel(md, DWM_VID_IF_CFG0, md->setup.vid_if_cfg[0]);
     hx_mipi_dsi_writel(md, DWM_PHY_RSTZ, DWM_PHY_RSTZ_ENFORCEPLL | DWM_PHY_RSTZ_ENABLECLK | DWM_PHY_RSTZ_UNSHUTDOWNZ);
     usleep_range(100, 500);
     hx_mipi_dsi_writel(md, DWM_PHY_RSTZ, DWM_PHY_RSTZ_ENFORCEPLL | DWM_PHY_RSTZ_ENABLECLK | DWM_PHY_RSTZ_UNRSTZ | DWM_PHY_RSTZ_UNSHUTDOWNZ);
@@ -435,7 +441,7 @@ static void hx_mipi_dsi_turn_on(struct hx_mipi_dsi *md)
     usleep_range(7500, 10000);
     hx_mipi_dsi_send_short(md, 0x11, 0);
     usleep_range(500, 1500);
-    hx_mipi_dsi_phy_write(md, 0x71, 0x8D);
+    hx_mipi_dsi_phy_write(md, 0x71, (md->setup.vid_if_cfg[0] == 2) ? 0x85 : 0x8D);
     hx_mipi_dsi_phy_write(md, 0x32, 0x80);
     hx_mipi_dsi_phy_write(md, 0x42, 0x80);
     hx_mipi_dsi_phy_write(md, 0x52, 0x80);
@@ -489,7 +495,7 @@ static int hx_mipi_dsi_probe(struct platform_device *pdev)
 {
     struct hx_mipi_dsi *md;
     struct resource *r;
-    int ret = 0;
+    int ret = 0, i;
     const char *supply_name = NULL;
 
     md = devm_kzalloc(&pdev->dev, sizeof(struct hx_mipi_dsi), GFP_KERNEL);
@@ -560,6 +566,8 @@ static int hx_mipi_dsi_probe(struct platform_device *pdev)
     md->setup.vfp_lines = hx_mipi_dsi_readl(md, DWM_VID_VFP_LINES);
     md->setup.clkmgr_cfg = hx_mipi_dsi_readl(md, DWM_CLKMGR_CFG);
     md->setup.phy_if_cfg = hx_mipi_dsi_readl(md, DWM_PHY_IF_CFG);
+    for(i=0; i<5; i++)
+        md->setup.vid_if_cfg[i] = hx_mipi_dsi_readl(md, DWM_VID_IF_CFG0 + 4 * i);
 
     md->regu = devm_regulator_register(md->dev, &md->desc, &md->config);
     if(IS_ERR(md->regu)) {

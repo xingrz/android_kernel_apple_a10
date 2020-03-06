@@ -51,6 +51,7 @@ struct hx_touch_data {
     struct regulator *regu_hv;
     struct regulator *regu_core;
     struct completion irq_done;
+    u32 generation;
     int misc_dev_inuse;
     int ready;
     int virq;
@@ -112,57 +113,86 @@ static void hx_touch_process_report(struct hx_touch_data *hxt, u8 *data, unsigne
     input_sync(hxt->input_dev);
 }
 
-static void hx_touch_read_report(struct hx_touch_data *hxt)
+static int hx_touch_read_report(struct hx_touch_data *hxt)
 {
     struct spi_transfer xfer = { 0 };
     u8 readpkt[64] = { 0xEB, 1 + hxt->read_tag };
     int ret;
-    unsigned len, i;
+    unsigned len, i, g1done = 0, g1len = 0, step;
     u16 csum;
 
     gpiod_direction_output(hxt->gpiod_cs, 0);
-    usleep_range(100, 500);
+    usleep_range(1000, 2000);
     readpkt[14] = 0xEC + hxt->read_tag;
     xfer.tx_buf = readpkt;
+    xfer.rx_buf = readpkt;
     xfer.len = 16;
     ret = spi_sync_transfer(hxt->spi, &xfer, 1);
     gpiod_direction_output(hxt->gpiod_cs, 1);
-    usleep_range(2000, 4000);
+    usleep_range(1000, 2000);
     if(ret) {
         dev_warn(&hxt->spi->dev, "spi_sync_transfer returned %d\n", ret);
-        return;
+        return ret;
+    }
+
+    if(hxt->generation == 1) {
+        if(readpkt[0] == 0) {
+            g1done = 1;
+        } else {
+            g1len = readpkt[1] + ((unsigned)readpkt[2] << 8);
+            g1len += 5;
+            if(g1len < 16)
+                g1len = 16;
+        }
     }
 
     gpiod_direction_output(hxt->gpiod_cs, 0);
-    usleep_range(100, 500);
-    memset(readpkt, 0xA5, 16);
+    usleep_range(1000, 2000);
+    if(hxt->generation == 1) {
+        memset(readpkt, 0, 16);
+        readpkt[0] = 0xEB;
+        readpkt[1] = 1 + hxt->read_tag;
+        readpkt[2] = 1;
+        step = 16;
+        xfer.len = g1len < step ? g1len : step;
+    } else {
+        memset(readpkt, 0xA5, 16);
+        xfer.len = step = sizeof(readpkt);
+    }
     xfer.tx_buf = readpkt;
     xfer.rx_buf = readpkt;
-    xfer.len = sizeof(readpkt);
     ret = spi_sync_transfer(hxt->spi, &xfer, 1);
     if(ret) {
         gpiod_direction_output(hxt->gpiod_cs, 1);
         dev_warn(&hxt->spi->dev, "spi_sync_transfer returned %d\n", ret);
-        return;
-    }
-    len = readpkt[2] + ((unsigned)readpkt[3] << 8);
-    if(((readpkt[0] + readpkt[1] + readpkt[2] + readpkt[3] + readpkt[4]) & 0xFF) || len > 326 || (readpkt[0] & 0xFE) != 0xEA || readpkt[1] != 1 + hxt->read_tag) {
-        if(readpkt[0])
-            dev_warn(&hxt->spi->dev, "invalid read header: %02x %02x %02x %02x %02x\n", readpkt[0], readpkt[1], readpkt[2], readpkt[3], readpkt[4]);
-        gpiod_direction_output(hxt->gpiod_cs, 1);
-        return;
+        return ret;
     }
 
-    memcpy(hxt->rx_data, readpkt + 5, sizeof(readpkt) - 5);
-    if(len > sizeof(readpkt) - 5) {
+    if(hxt->generation == 1 && (!readpkt[0] || readpkt[0] == 0xE1)) {
+        gpiod_direction_output(hxt->gpiod_cs, 1);
+        usleep_range(1000, 2000);
+        return g1done ? -ENOENT : 0;
+    }
+
+    len = readpkt[2] + ((unsigned)readpkt[3] << 8);
+    if(((readpkt[0] + readpkt[1] + readpkt[2] + readpkt[3] + readpkt[4]) & 0xFF) || len > 326 || (readpkt[0] & 0xFE) != 0xEA || readpkt[1] != 1 + hxt->read_tag) {
+        gpiod_direction_output(hxt->gpiod_cs, 1);
+        usleep_range(1000, 2000);
+        if(readpkt[0])
+            dev_warn(&hxt->spi->dev, "invalid read header: %02x %02x %02x %02x %02x\n", readpkt[0], readpkt[1], readpkt[2], readpkt[3], readpkt[4]);
+        return -EINVAL;
+    }
+
+    memcpy(hxt->rx_data, readpkt + 5, step - 5);
+    if(len > step - 5) {
         xfer.tx_buf = NULL;
-        xfer.rx_buf = hxt->rx_data + sizeof(readpkt) - 5;
+        xfer.rx_buf = hxt->rx_data + step - 5;
         xfer.len = len;
         ret = spi_sync_transfer(hxt->spi, &xfer, 1);
         if(ret) {
             gpiod_direction_output(hxt->gpiod_cs, 1);
             dev_warn(&hxt->spi->dev, "spi_sync_transfer returned %d\n", ret);
-            return;
+            return ret;
         }
     }
     gpiod_direction_output(hxt->gpiod_cs, 1);
@@ -174,11 +204,28 @@ static void hx_touch_read_report(struct hx_touch_data *hxt)
     for(i=0; i<len; i++)
         csum -= hxt->rx_data[i];
     if(csum) {
+        usleep_range(1000, 2000);
         dev_warn(&hxt->spi->dev, "invalid data checksum: %04x\n", csum);
-        return;
+        return -EINVAL;
     }
 
     hx_touch_process_report(hxt, hxt->rx_data, len);
+    usleep_range(1000, 2000);
+
+    return 0;
+}
+
+static void hx_touch_read_all_reports(struct hx_touch_data *hxt)
+{
+    unsigned max;
+    int ret;
+
+    max = hxt->generation == 1 ? 4 : 1;
+    while(max --) {
+        ret = hx_touch_read_report(hxt);
+        if(ret)
+            break;
+    }
 }
 
 static irqreturn_t hx_touch_irq_handler(int irq, void *dev_id)
@@ -187,9 +234,9 @@ static irqreturn_t hx_touch_irq_handler(int irq, void *dev_id)
 
     mutex_lock(&hxt->mutex);
 
-    if(hxt->ready)
-        hx_touch_read_report(hxt);
-    else
+    if(hxt->ready) {
+        hx_touch_read_all_reports(hxt);
+    } else
         complete(&hxt->irq_done);
 
     mutex_unlock(&hxt->mutex);
@@ -351,7 +398,7 @@ static long hx_touch_misc_dev_ioctl(struct file *filp, unsigned int cmd, unsigne
 
         mutex_lock(&hxt->mutex);
         hxt->ready = 1;
-        hx_touch_read_report(hxt);
+        hx_touch_read_all_reports(hxt);
         mutex_unlock(&hxt->mutex);
         return 0;
     case HXT_IOC_SETUP_IRQ:
@@ -502,6 +549,9 @@ static int hx_touch_spi_probe(struct spi_device *spi)
         dev_err(&spi->dev, "IRQ GPIO is not usable as an IRQ: %d.\n", hxt->virq);
         return hxt->virq;
     }
+
+    if(of_property_read_u32_index(spi->dev.of_node, "generation", 0, &hxt->generation))
+        hxt->generation = 2;
 
     hxt->metrics.left = 0;
     hxt->metrics.right = 10000;
