@@ -15,7 +15,7 @@
     };
 
     chosen {
-        bootargs = "earlycon=hx_uart,0x20a0c0000 console=tty0 console=ttyHX0 selinux=1 enforcing=0 androidboot.selinux=permissive printk.devkmsg=on androidboot.hardware=ranchu";
+        bootargs = "earlycon=hx_uart,0x20a0c0000 console=tty0 console=ttyHX0 selinux=1 enforcing=0 androidboot.selinux=permissive printk.devkmsg=on androidboot.hardware=apple";
     };
 
     memory@800000000 {
