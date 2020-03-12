@@ -60,10 +60,10 @@ struct hx_cpufreq_data {
 
 /* frequency table for fast devices */
 
-#define NUM_STATES_FAST         12
-static const u8 hx_cpufreq_dvfm_vset_fast[NUM_STATES_FAST] = { 0x00, 0x00, 0x37, 0x3B, 0x4F, 0x40, 0x4C, 0x5F, 0x71, 0x8F, 0xB5, 0xB5 };
-static const u8 hx_cpufreq_dvfm_set1_fast[NUM_STATES_FAST] = { 0x00, 0x00, 0x0A, 0x05, 0x04, 0x1F, 0x15, 0x10, 0x0D, 0x0B, 0x09, 0x09 };
-static const u8 hx_cpufreq_dvfm_set2_fast[NUM_STATES_FAST] = { 0x00, 0x00, 0x12, 0x0A, 0x06, 0x09, 0x07, 0x05, 0x04, 0x03, 0x03, 0x03 };
+#define NUM_STATES_FAST         10
+static const u8 hx_cpufreq_dvfm_vset_fast[NUM_STATES_FAST] = { 0x00, 0x00, 0x37, 0x3B, 0x4F, 0x40, 0x4C, 0x5F, 0x71, 0x8F };
+static const u8 hx_cpufreq_dvfm_set1_fast[NUM_STATES_FAST] = { 0x00, 0x00, 0x0A, 0x05, 0x04, 0x1F, 0x15, 0x10, 0x0D, 0x0B };
+static const u8 hx_cpufreq_dvfm_set2_fast[NUM_STATES_FAST] = { 0x00, 0x00, 0x12, 0x0A, 0x06, 0x09, 0x07, 0x05, 0x04, 0x03 };
 
 /* E-core frequencies are adjusted to match measured performance to produce a linear "frequency" table */
 static struct cpufreq_frequency_table hx_cpufreq_table_fast[NUM_STATES_FAST + 1] = {
@@ -77,8 +77,6 @@ static struct cpufreq_frequency_table hx_cpufreq_table_fast[NUM_STATES_FAST + 1]
     { .frequency = 1356000 }, /* 1356 MHz, P-core */
     { .frequency = 1644000 }, /* 1644 MHz, P-core */
     { .frequency = 1944000 }, /* 1944 MHz, P-core */
-    { .frequency = 2244000 }, /* 2244 MHz, P-core */
-    { .frequency = 2340000 }, /* 2340 MHz, P-core */
     { .frequency = CPUFREQ_TABLE_END } };
 
 static const struct hx_cpufreq_config hx_cpufreq_config_fast = {
